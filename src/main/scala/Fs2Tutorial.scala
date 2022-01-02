@@ -24,6 +24,9 @@ object Fs2Tutorial extends IOApp {
 
   val jlActorList: List[Actor] = jlActors.toList
 
+  // Lifts a stream to an effect
+  val liftedJlActors: Stream[IO, Actor] = jlActors.covary[IO]
+
   // We are no constrained to use the IO effect
   // We can use any effect that implements the following interfaces
   // cats.MonadError[?, Throwable], cats.effect.Sync, cats.effect.Async, cats.effect.Concurrent
