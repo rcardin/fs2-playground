@@ -18,6 +18,8 @@ object Fs2Tutorial extends IOApp {
   object ActorRepository {
     def save(actor: Actor): IO[Int] = IO {
       println(s"Saving actor: $actor")
+      if (actor.id == 3) throw new RuntimeException("Something went wrong")
+      println(s"Saved.")
       actor.id
     }
   }
@@ -48,9 +50,17 @@ object Fs2Tutorial extends IOApp {
 
   val savedJlActors: Stream[IO, Int] = jlActors.flatMap(actor => Stream.eval(ActorRepository.save(actor)))
 
-  override def run(args: List[String]): IO[ExitCode] = {
-    // Compiling evaluates the stream to a single effect, but it doesn't execute it
-    savedActor.compile.drain.as(ExitCode.Success)
+  // Stream evaluation blocks on the first error
+  val errorHandledSavedJlActors: Stream[IO, AnyVal] =
+    savedJlActors.handleErrorWith(error => Stream.eval(IO(println(s"Error: $error"))))
+
+  val attemptedSavedJlActors: Stream[IO, Unit] = savedJlActors.attempt.flatMap {
+    case Left(error) => Stream.eval(IO(println(s"Error: $error")))
+    case Right(id) => Stream.eval(IO(println(s"Saved actor with id: $id")))
   }
 
+  override def run(args: List[String]): IO[ExitCode] = {
+    // Compiling evaluates the stream to a single effect, but it doesn't execute it
+    attemptedSavedJlActors.compile.drain.as(ExitCode.Success)
+  }
 }
