@@ -1,24 +1,51 @@
 import cats.effect.{ExitCode, IO, IOApp}
 import fs2.{INothing, Pure, Stream, Chunk}
 
+import Fs2Tutorial.Model.Actor
+import Fs2Tutorial.Data._
+
 object Fs2Tutorial extends IOApp {
 
-  case class Actor(id: Int, firstName: String, lastName: String)
+  object Model {
+    case class Actor(id: Int, firstName: String, lastName: String)
+  }
 
+  object Data {
+    val henryCavil: Actor = Actor(0, "Henry", "Cavill")
+    val galGodot: Actor = Actor(1, "Gal", "Godot")
+    val ezraMiller: Actor = Actor(2, "Ezra", "Miller")
+    val benFisher: Actor = Actor(3, "Ben", "Fisher")
+    val rayHardy: Actor = Actor(4, "Ray", "Hardy")
+    val jasonMomoa: Actor = Actor(5, "Jason", "Momoa")
+
+    val scarlettJohansson: Actor = Actor(7, "Scarlett", "Johansson")
+    val robertDowneyJr: Actor = Actor(8, "Robert", "Downey Jr.")
+    val chrisEvans: Actor = Actor(9, "Chris", "Evans")
+    val markRuffalo: Actor = Actor(10, "Mark", "Ruffalo")
+    val chrisHemsworth: Actor = Actor(11, "Chris", "Hemsworth")
+    val jeremyRenner: Actor = Actor(12, "Jeremy", "Renner")
+  }
   // Pure stream (doesn't require any effect)
   val jlActors: Stream[Pure, Actor] = Stream(
-    Actor(0, "Henry", "Cavill"),
-    Actor(1, "Gal", "Godot"),
-    Actor(2, "Ezra", "Miller"),
-    Actor(3, "Ben", "Fisher"),
-    Actor(4, "Ray", "Hardy"),
-    Actor(5, "Jason", "Momoa")
+    henryCavil,
+    galGodot,
+    ezraMiller,
+    benFisher,
+    rayHardy,
+    jasonMomoa
   )
 
   object ActorRepository {
     def save(actor: Actor): IO[Int] = IO {
       println(s"Saving actor: $actor")
       if (actor.id == 3) throw new RuntimeException("Something went wrong")
+      println(s"Saved.")
+      actor.id
+    }
+
+    def saveWithoutError(actor: Actor): IO[Int] = IO {
+      println(s"Saving actor: $actor")
+      Thread.sleep(100)
       println(s"Saved.")
       actor.id
     }
@@ -36,12 +63,12 @@ object Fs2Tutorial extends IOApp {
 
   // A Chunk is a strict, finite sequence of values that supports efficient indexed based lookup of elements.
   val avengersActors: Stream[Pure, Actor] = Stream.chunk(Chunk.array(Array(
-    Actor(7, "Scarlett", "Johansson"),
-    Actor(8, "Robert", "Downey Jr."),
-    Actor(9, "Chris", "Evans"),
-    Actor(10, "Mark", "Ruffalo"),
-    Actor(11, "Chris", "Hemsworth"),
-    Actor(12, "Jeremy", "Renner")
+    scarlettJohansson,
+    robertDowneyJr,
+    chrisEvans,
+    markRuffalo,
+    chrisHemsworth,
+    jeremyRenner
   )))
 
   // Regardless of how a Stream is built up, each operation takes constant time.
@@ -59,17 +86,48 @@ object Fs2Tutorial extends IOApp {
     case Right(id) => Stream.eval(IO(println(s"Saved actor with id: $id")))
   }
 
+  // Acquiring connection to the database
+  // Saving actor: Actor(0,Henry,Cavill)
+  // Saved.
+  // Saving actor: Actor(1,Gal,Godot)
+  // Saved.
+  // Saving actor: Actor(2,Ezra,Miller)
+  // Saved.
+  // Saving actor: Actor(3,Ben,Fisher)
+  // Error: java.lang.RuntimeException: Something went wrong
+  // Releasing connection to the database
   val managedJlActors: Stream[IO, AnyVal] = {
     val acquire = IO { println("Acquiring connection to the database") }
     val release = IO { println("Releasing connection to the database") }
-    for {
-      bracket <- Stream.bracket(acquire)(_ => release)
-      saved <- errorHandledSavedJlActors
-    } yield ()
+    Stream.bracket(acquire)(_ => release) >> errorHandledSavedJlActors
   }
+
+  // Pipe? Pull?
+
+  val concurrentJlActors: Stream[IO, Actor] = liftedJlActors.flatMap(actor => Stream.eval(IO {
+    Thread.sleep(400)
+    actor
+  }))
+
+  val liftedAvengersActors: Stream[IO, Actor] = avengersActors.covary[IO]
+  val concurrentAvengersActors: Stream[IO, Actor] = liftedAvengersActors.flatMap(actor => Stream.eval(IO {
+    Thread.sleep(200)
+    println(s"Slept 200ms before pushing $actor to the stream")
+    actor
+  }))
+
+  val mergedHeroesActors: Stream[IO, Unit] = concurrentJlActors.merge(concurrentAvengersActors).flatMap(actor => Stream.eval(IO(println(actor))))
+
+  val concurrentHeroesActors: Stream[IO, Unit] = concurrentJlActors.concurrently(concurrentAvengersActors).flatMap(actor => Stream.eval(IO(println(actor))))
+
+  val eitherHeroesActors: Stream[IO, Unit] = concurrentJlActors.either(concurrentAvengersActors).flatMap(actor => Stream.eval(IO(println(actor))))
+
+  // TODO Add the thread name to the output
+  val parJoinedHeroesActors: Stream[IO, Unit] = dcAndMarvelSuperheroes.map(actor => Stream.eval(ActorRepository.save(actor))).parJoin(2).flatMap(actor => Stream.eval(IO(println(actor))))
 
   override def run(args: List[String]): IO[ExitCode] = {
     // Compiling evaluates the stream to a single effect, but it doesn't execute it
-    managedJlActors.compile.drain.as(ExitCode.Success)
+    parJoinedHeroesActors.compile.drain.as(ExitCode.Success)
   }
+
 }
