@@ -59,8 +59,17 @@ object Fs2Tutorial extends IOApp {
     case Right(id) => Stream.eval(IO(println(s"Saved actor with id: $id")))
   }
 
+  val managedJlActors: Stream[IO, AnyVal] = {
+    val acquire = IO { println("Acquiring connection to the database") }
+    val release = IO { println("Releasing connection to the database") }
+    for {
+      bracket <- Stream.bracket(acquire)(_ => release)
+      saved <- errorHandledSavedJlActors
+    } yield ()
+  }
+
   override def run(args: List[String]): IO[ExitCode] = {
     // Compiling evaluates the stream to a single effect, but it doesn't execute it
-    attemptedSavedJlActors.compile.drain.as(ExitCode.Success)
+    managedJlActors.compile.drain.as(ExitCode.Success)
   }
 }
