@@ -3,6 +3,7 @@ import fs2.{INothing, Pure, Stream, Chunk}
 
 import Fs2Tutorial.Model.Actor
 import Fs2Tutorial.Data._
+import Fs2Tutorial.Utils._
 
 object Fs2Tutorial extends IOApp {
 
@@ -25,6 +26,14 @@ object Fs2Tutorial extends IOApp {
     val chrisHemsworth: Actor = Actor(11, "Chris", "Hemsworth")
     val jeremyRenner: Actor = Actor(12, "Jeremy", "Renner")
   }
+
+  object Utils {
+    extension [A] (io: IO[A]) def debug: IO[A] = io.map { value =>
+      println(s"[${Thread.currentThread().getName}] $value")
+      value
+    }
+  }
+
   // Pure stream (doesn't require any effect)
   val jlActors: Stream[Pure, Actor] = Stream(
     henryCavil,
@@ -41,14 +50,14 @@ object Fs2Tutorial extends IOApp {
       if (actor.id == 3) throw new RuntimeException("Something went wrong")
       println(s"Saved.")
       actor.id
-    }
+    }.debug
 
     def saveWithoutError(actor: Actor): IO[Int] = IO {
       println(s"Saving actor: $actor")
       Thread.sleep(100)
       println(s"Saved.")
       actor.id
-    }
+    }.debug
   }
 
   val jlActorList: List[Actor] = jlActors.toList
@@ -70,6 +79,12 @@ object Fs2Tutorial extends IOApp {
     chrisHemsworth,
     jeremyRenner
   )))
+
+  // Fold a stream
+  val avengersActorsByFirstName: Stream[IO, Unit] = avengersActors.fold(Map.empty[String, List[Actor]]) { (map, actor) =>
+    map + (actor.firstName -> (actor :: map.getOrElse(actor.firstName, Nil)))
+  }.covary[IO].evalMap(m => IO(println(m)))
+
 
   // Regardless of how a Stream is built up, each operation takes constant time.
   // So s ++ s2 takes constant time, likewise with s.flatMap(f) and handleErrorWith.
@@ -122,12 +137,15 @@ object Fs2Tutorial extends IOApp {
 
   val eitherHeroesActors: Stream[IO, Unit] = concurrentJlActors.either(concurrentAvengersActors).flatMap(actor => Stream.eval(IO(println(actor))))
 
-  // TODO Add the thread name to the output
-  val parJoinedHeroesActors: Stream[IO, Unit] = dcAndMarvelSuperheroes.map(actor => Stream.eval(ActorRepository.save(actor))).parJoin(2).flatMap(actor => Stream.eval(IO(println(actor))))
+  // evalMap is equal to s.flatMap(a => Stream.eval(f(a)))
+  // parEvalMap adds the parallelism to the stream
+  val parJoinedHeroesActors: Stream[IO, Unit] = dcAndMarvelSuperheroes.map(actor => Stream.eval(ActorRepository.save(actor))).parJoin(3).evalMap(actor => IO(println(actor)))
+
+  // fs2.io ?
 
   override def run(args: List[String]): IO[ExitCode] = {
     // Compiling evaluates the stream to a single effect, but it doesn't execute it
-    parJoinedHeroesActors.compile.drain.as(ExitCode.Success)
+     avengersActorsByFirstName.compile.drain.as(ExitCode.Success)
   }
 
 }
