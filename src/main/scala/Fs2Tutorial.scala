@@ -1,9 +1,8 @@
 import cats.effect.{ExitCode, IO, IOApp}
-import fs2.{INothing, Pure, Stream, Chunk}
-
+import fs2.{Chunk, INothing, Pipe, Pure, Stream}
 import Fs2Tutorial.Model.Actor
-import Fs2Tutorial.Data._
-import Fs2Tutorial.Utils._
+import Fs2Tutorial.Data.*
+import Fs2Tutorial.Utils.*
 
 object Fs2Tutorial extends IOApp {
 
@@ -117,7 +116,14 @@ object Fs2Tutorial extends IOApp {
     Stream.bracket(acquire)(_ => release) >> errorHandledSavedJlActors
   }
 
-  // Pipe? Pull?
+  // Pipes le us define some stages.
+  // A Pipe is a function that takes a stream and returns a stream.
+  val fromActorToStringPipe: Pipe[IO, Actor, String] = in =>
+    in.map(actor => s"${actor.firstName} ${actor.lastName}")
+
+  val stringNamesOfJlActors: Stream[IO, String] = jlActors.through(fromActorToStringPipe)
+
+  // Pull?
 
   val concurrentJlActors: Stream[IO, Actor] = liftedJlActors.flatMap(actor => Stream.eval(IO {
     Thread.sleep(400)
