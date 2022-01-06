@@ -1,5 +1,5 @@
 import cats.effect.{ExitCode, IO, IOApp}
-import fs2.{Chunk, INothing, Pipe, Pure, Stream}
+import fs2.{Chunk, INothing, Pipe, Pull, Pure, Stream}
 import Fs2Tutorial.Model.Actor
 import Fs2Tutorial.Data.*
 import Fs2Tutorial.Utils.*
@@ -32,6 +32,13 @@ object Fs2Tutorial extends IOApp {
       value
     }
   }
+
+  // The first thing is that fs2 is a pull based streaming library
+
+  // Streams can be used for two things
+  // one is actual streaming IO (take things and transform them without accumulating too much in memory)
+  // the other is for control flow
+  // (do ten requests, transforms all responses)
 
   // Pure stream (doesn't require any effect)
   val jlActors: Stream[Pure, Actor] = Stream(
@@ -118,12 +125,49 @@ object Fs2Tutorial extends IOApp {
 
   // Pipes le us define some stages.
   // A Pipe is a function that takes a stream and returns a stream.
+  // A pipe is pretty much a map/flatMap type functional operation but the pipe concept
+  // fits nicely into the mental model of a Stream.
   val fromActorToStringPipe: Pipe[IO, Actor, String] = in =>
     in.map(actor => s"${actor.firstName} ${actor.lastName}")
 
-  val stringNamesOfJlActors: Stream[IO, String] = jlActors.through(fromActorToStringPipe)
+  // A Sink, that is a Pipe with Unit output. Now deprecated in favor of the latter.
+  def toConsole[T]: Pipe[IO, T, Unit] = in =>
+      in.evalMap(str => IO(println(str)))
+
+  // ...or fromActorToStringPipe(jlActors)...see the implementation of the through method
+  val stringNamesOfJlActors: Stream[IO, Unit] =
+    jlActors.through(fromActorToStringPipe).through(toConsole)
 
   // Pull?
+  // Some examples on Int
+  // Nothing means can't return, Unit is "completes with no information"
+  val ints: Stream[Pure, Int] = Stream(1, 2, 3, 4, 5)
+  val pulledInts: Pull[Pure, INothing, Option[(Chunk[Int], Stream[Pure, Int])]] = ints.pull.uncons
+
+  def take[F[_], O](n: Long): Pipe[F, O, O] = {
+    def go(s: Stream[F, O], n: Long): Pull[F, O, Unit] =
+      s.pull.uncons.flatMap {
+        case Some((hd, tl)) =>
+          if (n <= 0) Pull.done
+          else if (hd.size <= n) Pull.output(hd) >> go(tl, n - hd.size)
+          else Pull.output(hd.take(n.toInt)) >> Pull.done
+        case None => Pull.done
+      }
+
+    in => go(in, n).stream
+  }
+
+  def takeByName(name: String): Pipe[IO, Actor, Actor] =
+    def go(s: Stream[IO, Actor], name: String): Pull[IO, Actor, Unit] =
+      s.pull.uncons1.flatMap {
+        case Some((hd, tl)) =>
+          if (hd.firstName == name) Pull.output1(hd) >> go(tl, name)
+          else Pull.done
+        case None => Pull.done
+      }
+    in => go(in, name).stream
+
+  val avengersActorsCalledChris = avengersActors.through(takeByName("Chris")).evalMap(actor => IO(println(actor)))
 
   val concurrentJlActors: Stream[IO, Actor] = liftedJlActors.flatMap(actor => Stream.eval(IO {
     Thread.sleep(400)
@@ -151,7 +195,7 @@ object Fs2Tutorial extends IOApp {
 
   override def run(args: List[String]): IO[ExitCode] = {
     // Compiling evaluates the stream to a single effect, but it doesn't execute it
-     avengersActorsByFirstName.compile.drain.as(ExitCode.Success)
+    avengersActorsCalledChris.compile.drain.as(ExitCode.Success)
   }
 
 }
