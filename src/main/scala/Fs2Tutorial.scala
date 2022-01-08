@@ -162,12 +162,13 @@ object Fs2Tutorial extends IOApp {
       s.pull.uncons1.flatMap {
         case Some((hd, tl)) =>
           if (hd.firstName == name) Pull.output1(hd) >> go(tl, name)
-          else Pull.done
+          else go(tl, name)
         case None => Pull.done
       }
     in => go(in, name).stream
 
-  val avengersActorsCalledChris = avengersActors.through(takeByName("Chris")).evalMap(actor => IO(println(actor)))
+  val avengersActorsCalledChris: Stream[IO, Unit] =
+    avengersActors.through(takeByName("Chris")).evalMap(actor => IO(println(actor)))
 
   val concurrentJlActors: Stream[IO, Actor] = liftedJlActors.flatMap(actor => Stream.eval(IO {
     Thread.sleep(400)
