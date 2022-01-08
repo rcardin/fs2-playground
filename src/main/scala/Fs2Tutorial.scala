@@ -95,6 +95,9 @@ object Fs2Tutorial extends IOApp {
     map + (actor.firstName -> (actor :: map.getOrElse(actor.firstName, Nil)))
   }.covary[IO].through(toConsole)
 
+  val avengersActorsFirstNames: Stream[IO, Unit] =
+    avengersActors.covary[IO].evalTap(actor => IO(println(actor))).map(_.firstName).through(toConsole)
+
 
   // Regardless of how a Stream is built up, each operation takes constant time.
   // So s ++ s2 takes constant time, likewise with s.flatMap(f) and handleErrorWith.
@@ -183,7 +186,7 @@ object Fs2Tutorial extends IOApp {
 
   override def run(args: List[String]): IO[ExitCode] = {
     // Compiling evaluates the stream to a single effect, but it doesn't execute it
-    avengersActorsCalledChris.compile.drain.as(ExitCode.Success)
+    avengersActorsFirstNames.compile.drain.as(ExitCode.Success)
   }
 
 }
