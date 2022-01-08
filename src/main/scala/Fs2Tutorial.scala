@@ -31,6 +31,10 @@ object Fs2Tutorial extends IOApp {
       println(s"[${Thread.currentThread().getName}] $value")
       value
     }
+
+    // A Sink, that is a Pipe with Unit output. Now deprecated in favor of the latter.
+    def toConsole[T]: Pipe[IO, T, Unit] = in =>
+      in.evalMap(str => IO(println(str)))
   }
 
   // The first thing is that fs2 is a pull based streaming library
@@ -89,22 +93,22 @@ object Fs2Tutorial extends IOApp {
   // Fold a stream
   val avengersActorsByFirstName: Stream[IO, Unit] = avengersActors.fold(Map.empty[String, List[Actor]]) { (map, actor) =>
     map + (actor.firstName -> (actor :: map.getOrElse(actor.firstName, Nil)))
-  }.covary[IO].evalMap(m => IO(println(m)))
+  }.covary[IO].through(toConsole)
 
 
   // Regardless of how a Stream is built up, each operation takes constant time.
   // So s ++ s2 takes constant time, likewise with s.flatMap(f) and handleErrorWith.
   val dcAndMarvelSuperheroes: Stream[Pure, Actor] = jlActors ++ avengersActors
 
-  val savedJlActors: Stream[IO, Int] = jlActors.flatMap(actor => Stream.eval(ActorRepository.save(actor)))
+  val savedJlActors: Stream[IO, Int] = jlActors.evalMap(ActorRepository.save)
 
   // Stream evaluation blocks on the first error
   val errorHandledSavedJlActors: Stream[IO, AnyVal] =
     savedJlActors.handleErrorWith(error => Stream.eval(IO(println(s"Error: $error"))))
 
-  val attemptedSavedJlActors: Stream[IO, Unit] = savedJlActors.attempt.flatMap {
-    case Left(error) => Stream.eval(IO(println(s"Error: $error")))
-    case Right(id) => Stream.eval(IO(println(s"Saved actor with id: $id")))
+  val attemptedSavedJlActors: Stream[IO, Unit] = savedJlActors.attempt.evalMap {
+    case Left(error) => IO(println(s"Error: $error"))
+    case Right(id) => IO(println(s"Saved actor with id: $id"))
   }
 
   // Acquiring connection to the database
@@ -130,33 +134,12 @@ object Fs2Tutorial extends IOApp {
   val fromActorToStringPipe: Pipe[IO, Actor, String] = in =>
     in.map(actor => s"${actor.firstName} ${actor.lastName}")
 
-  // A Sink, that is a Pipe with Unit output. Now deprecated in favor of the latter.
-  def toConsole[T]: Pipe[IO, T, Unit] = in =>
-      in.evalMap(str => IO(println(str)))
-
   // ...or fromActorToStringPipe(jlActors)...see the implementation of the through method
   val stringNamesOfJlActors: Stream[IO, Unit] =
     jlActors.through(fromActorToStringPipe).through(toConsole)
 
-  // Pull?
-  // Some examples on Int
+  // Pull
   // Nothing means can't return, Unit is "completes with no information"
-  val ints: Stream[Pure, Int] = Stream(1, 2, 3, 4, 5)
-  val pulledInts: Pull[Pure, INothing, Option[(Chunk[Int], Stream[Pure, Int])]] = ints.pull.uncons
-
-  def take[F[_], O](n: Long): Pipe[F, O, O] = {
-    def go(s: Stream[F, O], n: Long): Pull[F, O, Unit] =
-      s.pull.uncons.flatMap {
-        case Some((hd, tl)) =>
-          if (n <= 0) Pull.done
-          else if (hd.size <= n) Pull.output(hd) >> go(tl, n - hd.size)
-          else Pull.output(hd.take(n.toInt)) >> Pull.done
-        case None => Pull.done
-      }
-
-    in => go(in, n).stream
-  }
-
   def takeByName(name: String): Pipe[IO, Actor, Actor] =
     def go(s: Stream[IO, Actor], name: String): Pull[IO, Actor, Unit] =
       s.pull.uncons1.flatMap {
@@ -168,29 +151,33 @@ object Fs2Tutorial extends IOApp {
     in => go(in, name).stream
 
   val avengersActorsCalledChris: Stream[IO, Unit] =
-    avengersActors.through(takeByName("Chris")).evalMap(actor => IO(println(actor)))
+    avengersActors.through(takeByName("Chris")).through(toConsole)
 
-  val concurrentJlActors: Stream[IO, Actor] = liftedJlActors.flatMap(actor => Stream.eval(IO {
+  val concurrentJlActors: Stream[IO, Actor] = liftedJlActors.evalMap(actor => IO {
     Thread.sleep(400)
     actor
-  }))
+  })
 
   val liftedAvengersActors: Stream[IO, Actor] = avengersActors.covary[IO]
-  val concurrentAvengersActors: Stream[IO, Actor] = liftedAvengersActors.flatMap(actor => Stream.eval(IO {
+  val concurrentAvengersActors: Stream[IO, Actor] = liftedAvengersActors.evalMap(actor => IO {
     Thread.sleep(200)
     println(s"Slept 200ms before pushing $actor to the stream")
     actor
-  }))
+  })
 
-  val mergedHeroesActors: Stream[IO, Unit] = concurrentJlActors.merge(concurrentAvengersActors).flatMap(actor => Stream.eval(IO(println(actor))))
+  val mergedHeroesActors: Stream[IO, Unit] =
+    concurrentJlActors.merge(concurrentAvengersActors).through(toConsole)
 
-  val concurrentHeroesActors: Stream[IO, Unit] = concurrentJlActors.concurrently(concurrentAvengersActors).flatMap(actor => Stream.eval(IO(println(actor))))
+  val concurrentHeroesActors: Stream[IO, Unit] =
+    concurrentJlActors.concurrently(concurrentAvengersActors).through(toConsole)
 
-  val eitherHeroesActors: Stream[IO, Unit] = concurrentJlActors.either(concurrentAvengersActors).flatMap(actor => Stream.eval(IO(println(actor))))
+  val eitherHeroesActors: Stream[IO, Unit] =
+    concurrentJlActors.either(concurrentAvengersActors).through(toConsole)
 
   // evalMap is equal to s.flatMap(a => Stream.eval(f(a)))
   // parEvalMap adds the parallelism to the stream
-  val parJoinedHeroesActors: Stream[IO, Unit] = dcAndMarvelSuperheroes.map(actor => Stream.eval(ActorRepository.save(actor))).parJoin(3).evalMap(actor => IO(println(actor)))
+  val parJoinedHeroesActors: Stream[IO, Unit] =
+    dcAndMarvelSuperheroes.map(actor => Stream.eval(ActorRepository.save(actor))).parJoin(3).through(toConsole)
 
   // fs2.io ?
 
