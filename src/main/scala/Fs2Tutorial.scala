@@ -34,7 +34,7 @@ object Fs2Tutorial extends IOApp {
 
     // A Sink, that is a Pipe with Unit output. Now deprecated in favor of the latter.
     def toConsole[T]: Pipe[IO, T, Unit] = in =>
-      in.evalMap(str => IO(println(str)))
+      in.evalMap(str => IO.println(str))
   }
 
   // The first thing is that fs2 is a pull based streaming library
@@ -181,8 +181,6 @@ object Fs2Tutorial extends IOApp {
   // parEvalMap adds the parallelism to the stream
   val parJoinedHeroesActors: Stream[IO, Unit] =
     dcAndMarvelSuperheroes.map(actor => Stream.eval(ActorRepository.save(actor))).parJoin(3).through(toConsole)
-
-  // fs2.io ?
 
   override def run(args: List[String]): IO[ExitCode] = {
     // Compiling evaluates the stream to a single effect, but it doesn't execute it
