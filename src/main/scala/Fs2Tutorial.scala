@@ -71,6 +71,7 @@ object Fs2Tutorial extends IOApp {
   }
 
   val jlActorList: List[Actor] = jlActors.toList
+  val jlActorVector: Vector[Actor] = jlActors.toVector
 
   // Lifts a stream to an effect
   val liftedJlActors: Stream[IO, Actor] = jlActors.covary[IO]
