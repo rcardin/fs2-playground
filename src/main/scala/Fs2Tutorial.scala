@@ -82,6 +82,21 @@ object Fs2Tutorial extends IOApp {
   // We are no constrained to use the IO effect
   // We can use any effect that implements the following interfaces
   // cats.MonadError[?, Throwable], cats.effect.Sync, cats.effect.Async, cats.effect.Concurrent
+
+  val savingTomHolland: Stream[IO, Unit] = Stream.eval {
+    IO {
+      val tomHolland = Actor(13, "Tom", "Holland")
+      println(s"Saving actor $tomHolland")
+      Thread.sleep(1000)
+      println("Finished")
+    }
+  }
+
+  // [error] 95 |  savingTomHolland.toList
+  // [error]    |  ^^^^^^^^^^^^^^^^^^^^^^^
+  // [error]    |value toList is not a member of fs2.Stream[cats.effect.IO, Unit], but could be made available as an extension method.
+  // savingTomHolland.toList
+
   val savedActor: Stream[IO, Int] = Stream.eval(ActorRepository.save(Actor(6, "Tom", "Hanks")))
 
   // A Chunk is a strict, finite sequence of values that supports efficient indexed based lookup of elements.
