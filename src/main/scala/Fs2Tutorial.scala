@@ -3,6 +3,7 @@ import fs2.{Chunk, INothing, Pipe, Pull, Pure, Stream}
 import Fs2Tutorial.Model.Actor
 import Fs2Tutorial.Data.*
 import Fs2Tutorial.Utils.*
+import cats.Id
 
 object Fs2Tutorial extends IOApp {
 
@@ -78,6 +79,8 @@ object Fs2Tutorial extends IOApp {
 
   // Lifts a stream to an effect
   val liftedJlActors: Stream[IO, Actor] = jlActors.covary[IO]
+
+  val jlActorsEffectfulList: IO[List[Actor]] = liftedJlActors.compile.toList
 
   // We are no constrained to use the IO effect
   // We can use any effect that implements the following interfaces
@@ -201,8 +204,13 @@ object Fs2Tutorial extends IOApp {
   val parJoinedHeroesActors: Stream[IO, Unit] =
     dcAndMarvelSuperheroes.map(actor => Stream.eval(ActorRepository.save(actor))).parJoin(3).through(toConsole)
 
+//  import cats.effect.unsafe.implicits.global
+//
+//  savingTomHolland.compile.drain.unsafeRunSync()
+
   override def run(args: List[String]): IO[ExitCode] = {
     // Compiling evaluates the stream to a single effect, but it doesn't execute it
+    val compiledStream: IO[Unit] = avengersActorsFirstNames.compile.drain
     avengersActorsFirstNames.compile.drain.as(ExitCode.Success)
   }
 
