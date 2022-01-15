@@ -25,6 +25,10 @@ object Fs2Tutorial extends IOApp {
     val markRuffalo: Actor = Actor(10, "Mark", "Ruffalo")
     val chrisHemsworth: Actor = Actor(11, "Chris", "Hemsworth")
     val jeremyRenner: Actor = Actor(12, "Jeremy", "Renner")
+
+    val tomHolland: Actor = Actor(13, "Tom", "Holland")
+    val tobeyMaguire: Actor = Actor(14, "Tobey", "Maguire")
+    val andrewGarfield: Actor = Actor(15, "Andrew", "Garfield")
   }
 
   object Utils {
@@ -86,9 +90,11 @@ object Fs2Tutorial extends IOApp {
   // We can use any effect that implements the following interfaces
   // cats.MonadError[?, Throwable], cats.effect.Sync, cats.effect.Async, cats.effect.Concurrent
 
+  val tomHollandStream: Stream[Pure, Actor] = Stream.emit(tomHolland)
+  val spiderMen: Stream[Pure, Actor] = Stream.emits(List(tomHolland, tobeyMaguire, andrewGarfield))
+
   val savingTomHolland: Stream[IO, Unit] = Stream.eval {
     IO {
-      val tomHolland = Actor(13, "Tom", "Holland")
       println(s"Saving actor $tomHolland")
       Thread.sleep(1000)
       println("Finished")
@@ -124,6 +130,12 @@ object Fs2Tutorial extends IOApp {
   // Regardless of how a Stream is built up, each operation takes constant time.
   // So s ++ s2 takes constant time, likewise with s.flatMap(f) and handleErrorWith.
   val dcAndMarvelSuperheroes: Stream[Pure, Actor] = jlActors ++ avengersActors
+
+  val printedJlActors: Stream[IO, Unit] = jlActors.flatMap { actor =>
+    Stream.eval(IO.println(actor))
+  }
+
+  jlActors.evalMap(IO.println)
 
   val savedJlActors: Stream[IO, Int] = jlActors.evalMap(ActorRepository.save)
 
