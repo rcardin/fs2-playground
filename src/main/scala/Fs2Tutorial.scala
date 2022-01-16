@@ -1,9 +1,9 @@
-import cats.effect.{ExitCode, IO, IOApp}
-import fs2.{Chunk, INothing, Pipe, Pull, Pure, Stream}
-import Fs2Tutorial.Model.Actor
 import Fs2Tutorial.Data.*
+import Fs2Tutorial.Model.Actor
 import Fs2Tutorial.Utils.*
 import cats.Id
+import cats.effect.{ExitCode, IO, IOApp}
+import fs2.{Chunk, INothing, Pipe, Pull, Pure, Stream}
 
 object Fs2Tutorial extends IOApp {
 
@@ -119,9 +119,9 @@ object Fs2Tutorial extends IOApp {
   )))
 
   // Fold a stream
-  val avengersActorsByFirstName: Stream[IO, Unit] = avengersActors.fold(Map.empty[String, List[Actor]]) { (map, actor) =>
+  val avengersActorsByFirstName: Stream[Pure, Map[String, List[Actor]]] = avengersActors.fold(Map.empty[String, List[Actor]]) { (map, actor) =>
     map + (actor.firstName -> (actor :: map.getOrElse(actor.firstName, Nil)))
-  }.covary[IO].through(toConsole)
+  }
 
   val avengersActorsFirstNames: Stream[IO, Unit] =
     avengersActors.covary[IO].evalTap(actor => IO(println(actor))).map(_.firstName).through(toConsole)
@@ -135,7 +135,8 @@ object Fs2Tutorial extends IOApp {
     Stream.eval(IO.println(actor))
   }
 
-  jlActors.evalMap(IO.println)
+  val evalMappedJlActors: Stream[IO, Unit] = jlActors.evalMap(IO.println)
+  val evalTappedJlActors: Stream[IO, Actor] = jlActors.evalTap(IO.println)
 
   val savedJlActors: Stream[IO, Int] = jlActors.evalMap(ActorRepository.save)
 
