@@ -5,6 +5,8 @@ import cats.Id
 import cats.effect.{ExitCode, IO, IOApp}
 import fs2.{Chunk, INothing, Pipe, Pull, Pure, Stream}
 
+import scala.util.Random
+
 object Fs2Tutorial extends IOApp {
 
   object Model {
@@ -62,7 +64,9 @@ object Fs2Tutorial extends IOApp {
   object ActorRepository {
     def save(actor: Actor): IO[Int] = IO {
       println(s"Saving actor: $actor")
-      if (actor.id == 3) throw new RuntimeException("Something went wrong")
+      if (Random.nextInt() % 2 == 0) {
+        throw new RuntimeException("Something went wrong during the communication with the persistence layer")
+      }
       println(s"Saved.")
       actor.id
     }.debug
@@ -142,7 +146,7 @@ object Fs2Tutorial extends IOApp {
 
   // Stream evaluation blocks on the first error
   val errorHandledSavedJlActors: Stream[IO, AnyVal] =
-    savedJlActors.handleErrorWith(error => Stream.eval(IO(println(s"Error: $error"))))
+    savedJlActors.handleErrorWith(error => Stream.eval(IO.println(s"Error: $error")))
 
   val attemptedSavedJlActors: Stream[IO, Unit] = savedJlActors.attempt.evalMap {
     case Left(error) => IO(println(s"Error: $error"))
@@ -223,8 +227,8 @@ object Fs2Tutorial extends IOApp {
 
   override def run(args: List[String]): IO[ExitCode] = {
     // Compiling evaluates the stream to a single effect, but it doesn't execute it
-    val compiledStream: IO[Unit] = avengersActorsFirstNames.compile.drain
-    avengersActorsFirstNames.compile.drain.as(ExitCode.Success)
+    // val compiledStream: IO[Unit] = avengersActorsFirstNames.compile.drain
+    savedJlActors.compile.drain.as(ExitCode.Success)
   }
 
 }
