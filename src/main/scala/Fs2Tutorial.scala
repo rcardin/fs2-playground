@@ -148,9 +148,10 @@ object Fs2Tutorial extends IOApp {
   val errorHandledSavedJlActors: Stream[IO, AnyVal] =
     savedJlActors.handleErrorWith(error => Stream.eval(IO.println(s"Error: $error")))
 
-  val attemptedSavedJlActors: Stream[IO, Unit] = savedJlActors.attempt.evalMap {
-    case Left(error) => IO(println(s"Error: $error"))
-    case Right(id) => IO(println(s"Saved actor with id: $id"))
+  val attemptedSavedJlActors: Stream[IO, Either[Throwable, Int]] = savedJlActors.attempt
+  attemptedSavedJlActors.evalMap {
+    case Left(error) => IO.println(s"Error: $error")
+    case Right(id) => IO.println(s"Saved actor with id: $id")
   }
 
   // Acquiring connection to the database
