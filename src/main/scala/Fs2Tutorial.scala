@@ -164,10 +164,15 @@ object Fs2Tutorial extends IOApp {
   // Saving actor: Actor(3,Ben,Fisher)
   // Error: java.lang.RuntimeException: Something went wrong
   // Releasing connection to the database
-  val managedJlActors: Stream[IO, AnyVal] = {
-    val acquire = IO { println("Acquiring connection to the database") }
-    val release = IO { println("Releasing connection to the database") }
-    Stream.bracket(acquire)(_ => release) >> errorHandledSavedJlActors
+  case class DatabaseConnection(connection: String) extends AnyVal
+  val managedJlActors: Stream[IO, Int] = {
+    val acquire = IO {
+      val conn = DatabaseConnection("jlaConnection")
+      println(s"Acquiring connection to the database: $conn")
+      conn
+    }
+    val release = (conn: DatabaseConnection) => IO.println(s"Releasing connection to the database: $conn")
+    Stream.bracket(acquire)(release).flatMap(conn => savedJlActors)
   }
 
   // Pipes le us define some stages.
@@ -229,7 +234,7 @@ object Fs2Tutorial extends IOApp {
   override def run(args: List[String]): IO[ExitCode] = {
     // Compiling evaluates the stream to a single effect, but it doesn't execute it
     // val compiledStream: IO[Unit] = avengersActorsFirstNames.compile.drain
-    savedJlActors.compile.drain.as(ExitCode.Success)
+    managedJlActors.compile.drain.as(ExitCode.Success)
   }
 
 }
