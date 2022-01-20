@@ -188,6 +188,15 @@ object Fs2Tutorial extends IOApp {
 
   // Pull
   // Nothing means can't return, Unit is "completes with no information"
+
+  val tomHollandActorPull: Pull[Pure, Actor, Unit] = Pull.output1(tomHolland)
+
+  val tomHollandActorStream: Stream[Pure, Actor] = tomHollandActorPull.stream
+
+  val spiderMenActorPull: Pull[Pure, Actor, Unit] = tomHollandActorPull >> Pull.output1(tobeyMaguire) >> Pull.output1(andrewGarfield)
+
+  val avengersActorsPull: Pull[Pure, Actor, Unit] = avengersActors.pull.echo
+
   def takeByName(name: String): Pipe[IO, Actor, Actor] =
     def go(s: Stream[IO, Actor], name: String): Pull[IO, Actor, Unit] =
       s.pull.uncons1.flatMap {
