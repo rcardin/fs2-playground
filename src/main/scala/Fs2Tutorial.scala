@@ -222,15 +222,21 @@ object Fs2Tutorial extends IOApp {
   val liftedAvengersActors: Stream[IO, Actor] = avengersActors.covary[IO]
   val concurrentAvengersActors: Stream[IO, Actor] = liftedAvengersActors.evalMap(actor => IO {
     Thread.sleep(200)
-    println(s"Slept 200ms before pushing $actor to the stream")
     actor
   })
 
   val mergedHeroesActors: Stream[IO, Unit] =
     concurrentJlActors.merge(concurrentAvengersActors).through(toConsole)
 
+  val sleepyheadStream: Stream[IO, INothing] = Stream.exec {
+    IO {
+      Thread.sleep(1000)
+      println("Slept for 1s")
+    }
+  }
+
   val concurrentHeroesActors: Stream[IO, Unit] =
-    concurrentJlActors.concurrently(concurrentAvengersActors).through(toConsole)
+    concurrentJlActors.concurrently(sleepyheadStream).through(toConsole)
 
   val eitherHeroesActors: Stream[IO, Unit] =
     concurrentJlActors.either(concurrentAvengersActors).through(toConsole)
@@ -247,7 +253,7 @@ object Fs2Tutorial extends IOApp {
   override def run(args: List[String]): IO[ExitCode] = {
     // Compiling evaluates the stream to a single effect, but it doesn't execute it
     // val compiledStream: IO[Unit] = avengersActorsFirstNames.compile.drain
-    managedJlActors.compile.drain.as(ExitCode.Success)
+    concurrentHeroesActors.compile.drain.as(ExitCode.Success)
   }
 
 }
