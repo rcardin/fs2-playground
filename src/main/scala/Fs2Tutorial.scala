@@ -197,6 +197,10 @@ object Fs2Tutorial extends IOApp {
 
   val avengersActorsPull: Pull[Pure, Actor, Unit] = avengersActors.pull.echo
 
+  val unconsAvengersActors: Pull[Pure, INothing, Option[(Chunk[Actor], Stream[Pure, Actor])]] =  avengersActors.pull.uncons
+
+  val uncons1AvengersActors: Pull[Pure, INothing, Option[(Actor, Stream[Pure, Actor])]] = avengersActors.pull.uncons1
+
   def takeByName(name: String): Pipe[IO, Actor, Actor] =
     def go(s: Stream[IO, Actor], name: String): Pull[IO, Actor, Unit] =
       s.pull.uncons1.flatMap {
