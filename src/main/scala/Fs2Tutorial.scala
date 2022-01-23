@@ -2,10 +2,9 @@ import Fs2Tutorial.Data.*
 import Fs2Tutorial.Model.Actor
 import Fs2Tutorial.Utils.*
 import cats.Id
+import cats.effect.std.{Queue, Random}
 import cats.effect.{ExitCode, IO, IOApp}
 import fs2.{Chunk, INothing, Pipe, Pull, Pure, Stream}
-
-import scala.util.Random
 
 object Fs2Tutorial extends IOApp {
 
@@ -64,7 +63,7 @@ object Fs2Tutorial extends IOApp {
   object ActorRepository {
     def save(actor: Actor): IO[Int] = IO {
       println(s"Saving actor: $actor")
-      if (Random.nextInt() % 2 == 0) {
+      if (scala.util.Random.nextInt() % 2 == 0) {
         throw new RuntimeException("Something went wrong during the communication with the persistence layer")
       }
       println(s"Saved.")
@@ -235,6 +234,30 @@ object Fs2Tutorial extends IOApp {
     }
   }
 
+  import scala.concurrent.duration._
+  val random: IO[Random[IO]] = Random.scalaUtilRandom[IO]
+  val queue: IO[Queue[IO, Int]] = Queue.bounded[IO, Int] (10)
+  val producer: IO[Unit] = for {
+    r <- random
+    q <- queue
+    p <-
+      r.betweenInt(1, 11)
+      .flatMap { n =>
+        q.offer(n) >> IO.println(s"Produced $n")
+      }
+      .flatTap(_ => IO.sleep(1.second))
+      .foreverM
+  } yield IO.println("Producer finished.")
+
+  val consumer: IO[Unit] = for {
+    q <- queue
+    c <- q.take.flatMap { n =>
+      IO.println(s"Consumed $n")
+    }.foreverM
+  } yield IO.println("Consuming done.")
+
+  val concurrently: Stream[IO, Unit] = Stream.eval(consumer).concurrently(Stream.eval(producer))
+
   val concurrentHeroesActors: Stream[IO, Unit] =
     concurrentJlActors.concurrently(sleepyheadStream).through(toConsole)
 
@@ -253,7 +276,7 @@ object Fs2Tutorial extends IOApp {
   override def run(args: List[String]): IO[ExitCode] = {
     // Compiling evaluates the stream to a single effect, but it doesn't execute it
     // val compiledStream: IO[Unit] = avengersActorsFirstNames.compile.drain
-    concurrentHeroesActors.compile.drain.as(ExitCode.Success)
+    concurrently.compile.drain.as(ExitCode.Success)
   }
 
 }
