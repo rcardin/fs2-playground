@@ -4,7 +4,10 @@ import Fs2Tutorial.Utils.*
 import cats.Id
 import cats.effect.std.{Queue, Random}
 import cats.effect.{ExitCode, IO, IOApp}
+import cats.syntax.all.*
 import fs2.{Chunk, INothing, Pipe, Pull, Pure, Stream}
+
+import scala.concurrent.duration.*
 
 object Fs2Tutorial extends IOApp {
 
@@ -234,29 +237,15 @@ object Fs2Tutorial extends IOApp {
     }
   }
 
-  import scala.concurrent.duration._
-  val random: IO[Random[IO]] = Random.scalaUtilRandom[IO]
-  val queue: IO[Queue[IO, Int]] = Queue.bounded[IO, Int] (10)
-  val producer: IO[Unit] = for {
-    r <- random
-    q <- queue
-    p <-
-      r.betweenInt(1, 11)
-      .flatMap { n =>
-        q.offer(n) >> IO.println(s"Produced $n")
-      }
-      .flatTap(_ => IO.sleep(1.second))
-      .foreverM
-  } yield IO.println("Producer finished.")
+  val queue: IO[Queue[IO, Actor]] = Queue.bounded[IO, Actor] (10)
 
-  val consumer: IO[Unit] = for {
-    q <- queue
-    c <- q.take.flatMap { n =>
-      IO.println(s"Consumed $n")
-    }.foreverM
-  } yield IO.println("Consuming done.")
-
-  val concurrently: Stream[IO, Unit] = Stream.eval(consumer).concurrently(Stream.eval(producer))
+  val concurrentlyStreams: Stream[IO, Unit] = Stream.eval(queue).flatMap { q =>
+    val producer: Stream[IO, Unit] =
+      liftedJlActors.evalMap(q.offer).metered(1.second)
+    val consumer: Stream[IO, Unit] =
+      Stream.fromQueueUnterminated(q).evalMap(actor => IO.println(s"Consumer $actor"))
+    producer.concurrently(consumer)
+  }
 
   val concurrentHeroesActors: Stream[IO, Unit] =
     concurrentJlActors.concurrently(sleepyheadStream).through(toConsole)
@@ -269,14 +258,18 @@ object Fs2Tutorial extends IOApp {
   val parJoinedHeroesActors: Stream[IO, Unit] =
     dcAndMarvelSuperheroes.map(actor => Stream.eval(ActorRepository.save(actor))).parJoin(3).through(toConsole)
 
-//  import cats.effect.unsafe.implicits.global
-//
-//  savingTomHolland.compile.drain.unsafeRunSync()
+  val parJoinedActors: Stream[IO, Unit] =
+    Stream(
+      jlActors.through(toConsole),
+      avengersActors.through(toConsole),
+      spiderMen.through(toConsole)
+    ).parJoin(4)
+
 
   override def run(args: List[String]): IO[ExitCode] = {
     // Compiling evaluates the stream to a single effect, but it doesn't execute it
     // val compiledStream: IO[Unit] = avengersActorsFirstNames.compile.drain
-    concurrently.compile.drain.as(ExitCode.Success)
+    parJoinedActors.compile.drain.as(ExitCode.Success)
   }
 
 }
