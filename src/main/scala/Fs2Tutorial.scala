@@ -241,9 +241,13 @@ object Fs2Tutorial extends IOApp {
 
   val concurrentlyStreams: Stream[IO, Unit] = Stream.eval(queue).flatMap { q =>
     val producer: Stream[IO, Unit] =
-      liftedJlActors.evalMap(q.offer).metered(1.second)
+      liftedJlActors
+        .evalTap(actor => IO.println(s"[${Thread.currentThread().getName}] produced $actor"))
+        .evalMap(q.offer)
+        .metered(1.second)
     val consumer: Stream[IO, Unit] =
-      Stream.fromQueueUnterminated(q).evalMap(actor => IO.println(s"Consumer $actor"))
+      Stream.fromQueueUnterminated(q)
+        .evalMap(actor => IO.println(s"[${Thread.currentThread().getName}] consumed $actor"))
     producer.concurrently(consumer)
   }
 
@@ -258,18 +262,21 @@ object Fs2Tutorial extends IOApp {
   val parJoinedHeroesActors: Stream[IO, Unit] =
     dcAndMarvelSuperheroes.map(actor => Stream.eval(ActorRepository.save(actor))).parJoin(3).through(toConsole)
 
+  val toConsoleWithThread: Pipe[IO, Actor, Unit] = in =>
+    in.evalMap(actor => IO.println(s"[${Thread.currentThread().getName}] consumed $actor"))
+
   val parJoinedActors: Stream[IO, Unit] =
     Stream(
-      jlActors.through(toConsole),
-      avengersActors.through(toConsole),
-      spiderMen.through(toConsole)
+      jlActors.through(toConsoleWithThread),
+      avengersActors.through(toConsoleWithThread),
+      spiderMen.through(toConsoleWithThread)
     ).parJoin(4)
 
 
   override def run(args: List[String]): IO[ExitCode] = {
     // Compiling evaluates the stream to a single effect, but it doesn't execute it
     // val compiledStream: IO[Unit] = avengersActorsFirstNames.compile.drain
-    parJoinedActors.compile.drain.as(ExitCode.Success)
+    concurrentlyStreams.compile.drain.as(ExitCode.Success)
   }
 
 }
