@@ -1,8 +1,7 @@
 import Fs2Tutorial.Data.*
 import Fs2Tutorial.Model.Actor
 import Fs2Tutorial.Utils.*
-import cats.Id
-import cats.effect.std.{Queue, Random}
+import cats.effect.std.Queue
 import cats.effect.{ExitCode, IO, IOApp}
 import cats.syntax.all.*
 import fs2.{Chunk, INothing, Pipe, Pull, Pure, Stream}
