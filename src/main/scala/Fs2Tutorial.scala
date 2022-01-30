@@ -1,8 +1,9 @@
 import Fs2Tutorial.Data.*
 import Fs2Tutorial.Model.Actor
 import Fs2Tutorial.Utils.*
+import cats.MonadThrow
 import cats.effect.std.Queue
-import cats.effect.{ExitCode, IO, IOApp}
+import cats.effect.{ExitCode, IO, IOApp, Sync}
 import cats.syntax.all.*
 import fs2.{Chunk, INothing, Pipe, Pull, Pure, Stream}
 
@@ -105,6 +106,8 @@ object Fs2Tutorial extends IOApp {
       println("Finished")
     }
   }
+
+  def jlActorStream[F[_]: MonadThrow]: Stream[F, Actor] = jlActors.covary[F]
 
   // [error] 95 |  savingTomHolland.toList
   // [error]    |  ^^^^^^^^^^^^^^^^^^^^^^^
@@ -275,7 +278,7 @@ object Fs2Tutorial extends IOApp {
   override def run(args: List[String]): IO[ExitCode] = {
     // Compiling evaluates the stream to a single effect, but it doesn't execute it
     // val compiledStream: IO[Unit] = avengersActorsFirstNames.compile.drain
-    concurrentlyStreams.compile.drain.as(ExitCode.Success)
+    jlActorStream[IO].compile.drain.as(ExitCode.Success)
   }
 
 }
