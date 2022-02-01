@@ -17,7 +17,7 @@ object Fs2Tutorial extends IOApp {
 
   object Data {
     val henryCavil: Actor = Actor(0, "Henry", "Cavill")
-    val galGodot: Actor = Actor(1, "Gal", "Godot")
+    val galGadot: Actor = Actor(1, "Gal", "Gadot")
     val ezraMiller: Actor = Actor(2, "Ezra", "Miller")
     val benFisher: Actor = Actor(3, "Ben", "Fisher")
     val rayHardy: Actor = Actor(4, "Ray", "Hardy")
@@ -56,7 +56,7 @@ object Fs2Tutorial extends IOApp {
   // Pure stream (doesn't require any effect)
   val jlActors: Stream[Pure, Actor] = Stream(
     henryCavil,
-    galGodot,
+    galGadot,
     ezraMiller,
     benFisher,
     rayHardy,
@@ -168,7 +168,7 @@ object Fs2Tutorial extends IOApp {
   // Saving actor: Actor(3,Ben,Fisher)
   // Error: java.lang.RuntimeException: Something went wrong
   // Releasing connection to the database
-  case class DatabaseConnection(connection: String) extends AnyVal
+  case class DatabaseConnection(connection: String)
   val managedJlActors: Stream[IO, Int] = {
     val acquire = IO {
       val conn = DatabaseConnection("jlaConnection")
